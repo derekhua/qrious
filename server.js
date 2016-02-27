@@ -10,7 +10,8 @@ var accountSid = 'AC466b9301d8e9cefd4c841794be11d77a';
 var authToken = '430f808373847f0f46f9c7ed35ef3533';
 var client = require('twilio')(accountSid, authToken);
 var vision = require('node-cloud-vision-api');
-var db = new Db('qrious', new Server('ds047632.mlab.com', '47632')); 
+var db = new Db('qrious', new Server('ds047632.mlab.com', '47632'));
+var collectionName = "results";
 vision.init({auth: 'AIzaSyC5WZaW1eYHseVXKaPTO62SkJplhsYN9ew'})
 
 // Parse application/x-www-form-urlencoded
@@ -40,6 +41,7 @@ function wolframQuery(str, res, twil, phone) {
       for (var i = 0; i < pods; i++) {
         for (var j = 0; j < result[i].subpods.length; j++) {
           if (result[i].subpods[j].value) {
+            text += result[i].title + "\n";
             text += ('\n' + result[i].subpods[j].value);
           } else {
             images.push(result[i].subpods[j].image);            
@@ -57,7 +59,7 @@ function wolframQuery(str, res, twil, phone) {
       }      
     });
 
-    db.collection("results").updateOne({'phone' : phone}, {'phone' : phone, 'results' : result}, { upsert: true }, function(err) {
+    db.collection(collectionName).updateOne({'phone' : phone}, {'phone' : phone, 'results' : result, 'index' : Math.min(result.length, 2)}, { upsert: true }, function(err) {
       if (err) {
         console.log(err);
       }
@@ -72,33 +74,76 @@ function wolframQuery(str, res, twil, phone) {
 
 app.post('/',function(req, res) {
   var twil = new twilio.TwimlResponse();
+  var phone = req.body.From;
+  if (req.body.Body.toLowerCase().trim() === 'more') {
+    var cursor = db.collection(collectionName).find({'phone' : phone});
+    cursor.each(function(err, doc) {
+      if (err) {
+        console.log(err)
+      }
+      else if (doc !== null) {
+        var text = "";
+        var images = [];
+        console.log(doc.results);
+        
+        if (doc.index < doc.results.length) {
+          for (var j = 0; j < doc.results[doc.index].subpods.length; j++) {
+            if (doc.results[doc.index].subpods[j].value) {
+              text += doc.results[doc.index].title + "\n";
+              text += ('\n' + doc.results[doc.index].subpods[j].value);
+            } else {
+              images.push(doc.results[doc.index].subpods[j].image);            
+            }          
+          }
+        }
+        else {
+          text = "No more information";
+        }
+        
+        twil.message(function() {
+          console.log(text);
+          console.log(images);
+          var temp = this.body(text);
+          for (var i = 0; i < images.length; ++i) {
+            temp = temp.media(images[i]);        
+          }      
+        });
 
-  // console.log(req);
+        db.collection(collectionName).updateOne({'phone' : phone}, {$inc : {'index' : 1}}, { upsert: true }, function(err) {
+          if (err) {
+            console.log(err);
+          }
+        });
 
-  // Image
-  if (req.body.MediaUrl0) {
-    // construct parameters
-    var req = new vision.Request({
-      image: new vision.Image({
-        url: req.body.MediaUrl0
-      }),
-      features: [        
-        new vision.Feature('LABEL_DETECTION', 1),
-      ]
+        res.send(twil.toString());
+      }
     });
-
-    // send single request
-    vision.annotate(req).then(function(response) {
-      // handling response
-      console.log(response.responses[0].labelAnnotations[0].description);
-      wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil, req.body.From);
-    }, function(e) {
-      console.log('Error: ', e);
-    });
-  } 
-
+  }
   else {
-    wolframQuery(req.body.Body, res, twil, req.body.From);
+    // Image
+    if (req.body.MediaUrl0) {
+      // construct parameters
+      var req = new vision.Request({
+        image: new vision.Image({
+          url: req.body.MediaUrl0
+        }),
+        features: [        
+          new vision.Feature('LABEL_DETECTION', 1),
+        ]
+      });
+
+      // send single request
+      vision.annotate(req).then(function(response) {
+        // handling response
+        console.log(response.responses[0].labelAnnotations[0].description);
+        wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil, phone);
+      }, function(e) {
+        console.log('Error: ', e);
+      });
+    } 
+    else {
+      wolframQuery(req.body.Body, res, twil, phone);
+    }
   }
 });
 
