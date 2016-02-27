@@ -1,7 +1,6 @@
 var app = require('express')();
 var server = require('http').Server(app);
-var bodyParser = require('body-parser')
-var Promise = require('promise');
+var bodyParser = require('body-parser');
 var twilio = require('twilio');
 var wolfram = require('wolfram').createClient("TKP9V8-V4KP6P5PKL");
 var Db = require('mongodb').Db;
@@ -10,7 +9,7 @@ var Server = require('mongodb').Server;
 var accountSid = 'AC466b9301d8e9cefd4c841794be11d77a';
 var authToken = '430f808373847f0f46f9c7ed35ef3533';
 var client = require('twilio')(accountSid, authToken);
-var vision = require('node-cloud-vision-api')
+var vision = require('node-cloud-vision-api');
 vision.init({auth: 'AIzaSyC5WZaW1eYHseVXKaPTO62SkJplhsYN9ew'})
 
 // Parse application/x-www-form-urlencoded
