@@ -10,6 +10,7 @@ var accountSid = 'AC466b9301d8e9cefd4c841794be11d77a';
 var authToken = '430f808373847f0f46f9c7ed35ef3533';
 var client = require('twilio')(accountSid, authToken);
 var vision = require('node-cloud-vision-api');
+var db = new Db('qrious', new Server('ds047632.mlab.com', '47632')); 
 vision.init({auth: 'AIzaSyC5WZaW1eYHseVXKaPTO62SkJplhsYN9ew'})
 
 // Parse application/x-www-form-urlencoded
@@ -26,7 +27,7 @@ app.use(function(req, res, next) {
 });
 
 
-function wolframQuery(str, res, twil) {
+function wolframQuery(str, res, twil, phone) {
   wolfram.query(str, function(err, result) { 
     var text = "";
     var images = [];
@@ -56,7 +57,7 @@ function wolframQuery(str, res, twil) {
       }      
     });
 
-    db.collection("results").updateOne({'phone' : req.body.from}, {'results' : result}, { upsert: true }, function(err) {
+    db.collection("results").updateOne({'phone' : phone}, {'phone' : phone, 'results' : result}, { upsert: true }, function(err) {
       if (err) {
         console.log(err);
       }
@@ -90,20 +91,19 @@ app.post('/',function(req, res) {
     vision.annotate(req).then(function(response) {
       // handling response
       console.log(response.responses[0].labelAnnotations[0].description);
-      wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil);
+      wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil, req.body.From);
     }, function(e) {
       console.log('Error: ', e);
     });
   } 
 
   else {
-    wolframQuery(req.body.Body, res, twil);
+    wolframQuery(req.body.Body, res, twil, req.body.From);
   }
 });
 
 server.listen(3000, function(){
   console.log('listening on *:3000');
-  var db = new Db('qrious', new Server('ds047632.mlab.com', '47632')); 
   db.open(function(err, db) {
     db.authenticate('qrious-admin', 'lobster897', function(err, result) { 
       if (err) {
