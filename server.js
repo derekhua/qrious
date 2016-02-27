@@ -24,10 +24,51 @@ app.use(function(req, res, next) {
   next();
 });
 
+
+function wolframQuery(str, res, twil) {
+  wolfram.query(str, function(err, result) { 
+    var text = "";
+    var images = [];
+
+    if(err) {
+      console.log(err);
+    }
+    else {
+      var pods = Math.min(result.length, 2);
+      for (var i = 0; i < pods; i++) {
+        for (var j = 0; j < result[i].subpods.length; j++) {
+          if (result[i].subpods[j].value) {
+            text += ('\n' + result[i].subpods[j].value);
+          } else {
+            images.push(result[i].subpods[j].image);            
+          }          
+        }
+      }
+    }    
+
+    twil.message(function() {
+      console.log(text);
+      console.log(images);
+      var temp = this.body(text);
+      for (var i = 0; i < images.length; ++i) {
+        temp = temp.media(images[i]);        
+      }      
+    });
+
+    // twil.message(text);
+
+    res.send(twil.toString());
+  });
+};
+
+
+
 app.post('/',function(req, res) {
-  var resp = new twilio.TwimlResponse();
+  var twil = new twilio.TwimlResponse();
+
   // console.log(req);
 
+  // Image
   if (req.body.MediaUrl0) {
     // construct parameters
     var req = new vision.Request({
@@ -43,54 +84,14 @@ app.post('/',function(req, res) {
     vision.annotate(req).then(function(response) {
       // handling response
       console.log(response.responses[0].labelAnnotations[0].description);
-      wolfram.query(response.responses[0].labelAnnotations[0].description, function(err, result) { 
-        if(err) {
-          console.log(err);
-        }
-        else {
-          var pods = Math.min(result.length, 2);
-          for (var i = 0; i < pods; i++) {
-            for (var j = 0; j < result[i].subpods.length; j++) {
-              resp.message(function() {
-                console.log(result[i].subpods[j].value);
-                console.log(result[i].subpods[j].image);
-                this.body(result[i].subpods[j].value).media(result[i].subpods[j].image);
-              });
-            }
-          }
-        }
-        res.writeHead(200, {
-          'Content-Type':'text/xml'
-        });
-        res.end(resp.toString());
-      });
+      wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil);
     }, function(e) {
-      console.log('Error: ', e)
+      console.log('Error: ', e);
     });
-  }
+  } 
 
   else {
-    wolfram.query(req.body.Body, function(err, result) { 
-      if(err) {
-        console.log(err);
-      }
-      else {
-        var pods = Math.min(result.length, 2);
-        for (var i = 0; i < pods; i++) {
-          for (var j = 0; j < result[i].subpods.length; j++) {
-            resp.message(function() {
-              console.log(result[i].subpods[j].value);
-              console.log(result[i].subpods[j].image);
-              this.body(result[i].subpods[j].value).media(result[i].subpods[j].image);
-            });
-          }
-        }
-      }
-      res.writeHead(200, {
-        'Content-Type':'text/xml'
-      });
-      res.end(resp.toString());
-    });
+    wolframQuery(req.body.Body, res, twil);
   }
 });
 
