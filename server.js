@@ -29,7 +29,23 @@ app.post('/',function(req, res) {
     if(err) {
       console.log(err);
     }
-    resp.message("Result: " + result);    
+    else {
+      var resultString = "";
+      var pods = Math.min(result.length, 2);
+      for (var i = 0; i < pods; i++) {
+        resultString += "[" + result[i].title + "]\n";
+        for (var j = 0; j < result[i].subpods.length; j++) {
+          if (result[i].subpods[j].value.length > 0) {
+            resultString += result[i].subpods[j].value;
+          }
+          else {
+            resultString += result[i].subpods[j].image;
+          }
+        }
+        resultString += "\n\n";
+      }
+    }
+    resp.message("Result: " + resultString);    
     res.writeHead(200, {
       'Content-Type':'text/xml'
     });
