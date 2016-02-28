@@ -5,6 +5,7 @@ var twilio = require('twilio');
 var wolfram = require('wolfram').createClient("TKP9V8-V4KP6P5PKL");
 var Db = require('mongodb').Db;
 var Server = require('mongodb').Server;  
+var googl = require('goo.gl');
 
 var accountSid = 'AC466b9301d8e9cefd4c841794be11d77a';
 var authToken = '430f808373847f0f46f9c7ed35ef3533';
@@ -13,6 +14,7 @@ var vision = require('node-cloud-vision-api');
 var db = new Db('qrious', new Server('ds047632.mlab.com', '47632'));
 var collectionName = "results";
 vision.init({auth: 'AIzaSyC5WZaW1eYHseVXKaPTO62SkJplhsYN9ew'})
+googl.setKey('AIzaSyCD5oVjDYW5ugqbsWL8HtIj2VvKzD3C9_w');
 
 // Parse application/x-www-form-urlencoded
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: false }));
@@ -36,42 +38,69 @@ function wolframQuery(str, res, twil, phone) {
   wolfram.query(str, function(err, result) { 
     var text = "";
     var images = [];
-
+    var longUrls = [];
     if(err) {
       console.log(err);
     }
-    else {     
+    else { 
       var pods = Math.min(result.length, 2);
+
       for (var i = 0; i < pods; i++) {
         text += '\n--------------------------\n' + result[i].title + ':\n--------------------------\n'
         for (var j = 0; j < result[i].subpods.length; j++) {
-          if (result[i].subpods[j].value) {         
+          if (result[i].subpods[j].value) { 
             var replaced = result[i].subpods[j].value.replaceAll("|", "\t");   
             text += replaced;
+            longUrls.push(result[i].subpods[j].image);
           } else {
             images.push(result[i].subpods[j].image);            
           }          
         }
       }
     }    
-
-    twil.message(function() {
-      console.log(text);
-      console.log(images);
-      var temp = this.body(text);
-      for (var i = 0; i < images.length; ++i) {
-        temp = temp.media(images[i]);        
-      }      
-    });
-
+    
     db.collection(collectionName).updateOne({'phone' : phone}, {'phone' : phone, 'results' : result, 'index' : Math.min(result.length, 2)}, { upsert: true }, function(err) {
       if (err) {
         console.log(err);
       }
     });
-    // twil.message(text);
+    
+    if (longUrls.length > 0) {
+      var numShortened = 0;
+      for (var i = 0; i < longUrls.length; i++) {
+        googl.shorten(longUrls[i])
+        .then(function (shortUrl) {
+          numShortened++;
+          text += '\n' + shortUrl;
+          if (numShortened === longUrls.length) {
+            twil.message(function() {
+              console.log(text);
+              console.log(images);
+              var temp = this.body(text);
+              for (var i = 0; i < images.length; ++i) {
+                temp = temp.media(images[i]);        
+              }      
+            });
+            res.send(twil.toString());
+          }
+        })
+        .catch(function (err) {
+          console.error(err.message);
+        });
+      }
+    }
+    else {
+      twil.message(function() {
+        console.log(text);
+        console.log(images);
+        var temp = this.body(text);
+        for (var i = 0; i < images.length; ++i) {
+          temp = temp.media(images[i]);        
+        }      
+      });
 
-    res.send(twil.toString());
+      res.send(twil.toString());
+    }
   });
 };
 
@@ -80,6 +109,7 @@ function wolframQuery(str, res, twil, phone) {
 app.post('/',function(req, res) {
   var twil = new twilio.TwimlResponse();
   var phone = req.body.From;
+  var longUrl;
   if (req.body.Body.toLowerCase().trim() === 'more') {
     var cursor = db.collection(collectionName).find({'phone' : phone});
     cursor.each(function(err, doc) {
@@ -97,6 +127,7 @@ app.post('/',function(req, res) {
             if (doc.results[doc.index].subpods[j].value) {
               var replaced = doc.results[doc.index].subpods[j].value.replaceAll("|", "\t");   
               text += replaced;
+              longUrl = doc.results[doc.index].subpods[j].image;
             } else {
               images.push(doc.results[doc.index].subpods[j].image);            
             }          
@@ -106,22 +137,41 @@ app.post('/',function(req, res) {
           text = "No more information";
         }
         
-        twil.message(function() {
-          console.log(text);
-          console.log(images);
-          var temp = this.body(text);
-          for (var i = 0; i < images.length; ++i) {
-            temp = temp.media(images[i]);        
-          }      
-        });
-
         db.collection(collectionName).updateOne({'phone' : phone}, {$inc : {'index' : 1}}, { upsert: true }, function(err) {
           if (err) {
             console.log(err);
           }
         });
-
-        res.send(twil.toString());
+        
+        if (longUrl) {
+          googl.shorten(longUrl)
+          .then(function (shortUrl) {
+            text += '\n' + shortUrl;
+            twil.message(function() {
+              console.log(text);
+              console.log(images);
+              var temp = this.body(text);
+              for (var i = 0; i < images.length; ++i) {
+                temp = temp.media(images[i]);        
+              }      
+            });
+            res.send(twil.toString());
+          })
+          .catch(function (err) {
+            console.error(err.message);
+          });
+        }
+        else {
+          twil.message(function() {
+            console.log(text);
+            console.log(images);
+            var temp = this.body(text);
+            for (var i = 0; i < images.length; ++i) {
+              temp = temp.media(images[i]);        
+            }      
+          });
+          res.send(twil.toString());
+        }
       }
     });
   }
