@@ -27,6 +27,10 @@ app.use(function(req, res, next) {
   next();
 });
 
+String.prototype.replaceAll = function(target, replacement) {
+  return this.split(target).join(replacement);
+};
+
 
 function wolframQuery(str, res, twil, phone) {
   wolfram.query(str, function(err, result) { 
@@ -39,10 +43,11 @@ function wolframQuery(str, res, twil, phone) {
     else {     
       var pods = Math.min(result.length, 2);
       for (var i = 0; i < pods; i++) {
+        text += '\n--------------------------\n' + result[i].title + ':\n--------------------------\n'
         for (var j = 0; j < result[i].subpods.length; j++) {
-          if (result[i].subpods[j].value) {
-            text += result[i].title + "\n";
-            text += ('\n' + result[i].subpods[j].value);
+          if (result[i].subpods[j].value) {         
+            var replaced = result[i].subpods[j].value.replaceAll("|", "\t");   
+            text += replaced;
           } else {
             images.push(result[i].subpods[j].image);            
           }          
@@ -87,10 +92,11 @@ app.post('/',function(req, res) {
         console.log(doc.results);
         
         if (doc.index < doc.results.length) {
+          text += '\n--------------------------\n' + doc.results[doc.index ].title + ':\n--------------------------\n';
           for (var j = 0; j < doc.results[doc.index].subpods.length; j++) {
             if (doc.results[doc.index].subpods[j].value) {
-              text += doc.results[doc.index].title + "\n";
-              text += ('\n' + doc.results[doc.index].subpods[j].value);
+              var replaced = doc.results[doc.index].subpods[j].value.replaceAll("|", "\t");   
+              text += replaced;
             } else {
               images.push(doc.results[doc.index].subpods[j].image);            
             }          
