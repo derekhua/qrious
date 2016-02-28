@@ -11,7 +11,7 @@ var accountSid = 'AC466b9301d8e9cefd4c841794be11d77a';
 var authToken = '430f808373847f0f46f9c7ed35ef3533';
 var client = require('twilio')(accountSid, authToken);
 var vision = require('node-cloud-vision-api');
-var db = new Db('qrious', new Server('ds047632.mlab.com', '47632'));
+var db = new Db('qrious', new Server('ds064188.mlab.com', '64188'));
 var collectionName = "results";
 vision.init({auth: 'AIzaSyC5WZaW1eYHseVXKaPTO62SkJplhsYN9ew'})
 googl.setKey('AIzaSyCD5oVjDYW5ugqbsWL8HtIj2VvKzD3C9_w');
@@ -46,7 +46,7 @@ function wolframQuery(str, res, twil, phone) {
       var pods = Math.min(result.length, 2);
 
       for (var i = 0; i < pods; i++) {
-        text += '\n--------------------------\n' + result[i].title + ':\n--------------------------\n'
+        text += '\n\n' + result[i].title + ':\n\n'
         for (var j = 0; j < result[i].subpods.length; j++) {
           if (result[i].subpods[j].value) { 
             var replaced = result[i].subpods[j].value.replaceAll("|", "\t");   
@@ -110,6 +110,7 @@ app.post('/',function(req, res) {
   var twil = new twilio.TwimlResponse();
   var phone = req.body.From;
   var longUrl;
+
   if (req.body.Body.toLowerCase().trim() === 'more') {
     var cursor = db.collection(collectionName).find({'phone' : phone});
     cursor.each(function(err, doc) {
@@ -122,7 +123,7 @@ app.post('/',function(req, res) {
         console.log(doc.results);
         
         if (doc.index < doc.results.length) {
-          text += '\n--------------------------\n' + doc.results[doc.index ].title + ':\n--------------------------\n';
+          text += '\n\n' + doc.results[doc.index ].title + ':\n\n';
           for (var j = 0; j < doc.results[doc.index].subpods.length; j++) {
             if (doc.results[doc.index].subpods[j].value) {
               var replaced = doc.results[doc.index].subpods[j].value.replaceAll("|", "\t");   
@@ -185,14 +186,20 @@ app.post('/',function(req, res) {
         }),
         features: [        
           new vision.Feature('LABEL_DETECTION', 1),
+          new vision.Feature('LOGO_DETECTION', 1)
         ]
       });
 
       // send single request
       vision.annotate(req).then(function(response) {
         // handling response
-        console.log(response.responses[0].labelAnnotations[0].description);
-        wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil, phone);
+        if (response.responses[0].logoAnnotations) {
+          console.log(response.responses[0].logoAnnotations[0].description);
+          wolframQuery(response.responses[0].logoAnnotations[0].description, res, twil, phone);  
+        } else {
+          console.log(response.responses[0].labelAnnotations[0].description);
+          wolframQuery(response.responses[0].labelAnnotations[0].description, res, twil, phone);  
+        }
       }, function(e) {
         console.log('Error: ', e);
       });
